@@ -1,0 +1,31 @@
+{
+  "_comment": "設定はここだけ触ればOK。しきい値や対象機種を変えられます。",
+
+  "profit_threshold_yen": 3000,
+  "renotify_step_yen": 2000,
+  "renotify_after_hours": 12,
+
+  "use_points": false,
+  "shipping_if_separate_yen": 800,
+  "buyback_shipping_yen": 0,
+  "extra_cost_per_unit_yen": 0,
+
+  "target_models": [
+    "iPhone 18",
+    "iPhone Duo",
+    "iPhone 17",
+    "iPhone Air",
+    "iPhone 16"
+  ],
+  "morimori_model_ids": [],
+
+  "min_price_ratio": 0.5,
+  "ng_words": [
+    "中古", "開封済", "展示", "訳あり", "ジャンク", "整備済", "リファービッシュ",
+    "ケース", "カバー", "フィルム", "保護", "ガラス", "充電", "レンタル", "ダミー", "模型"
+  ],
+
+  "rakuten_endpoint": "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601",
+  "request_interval_sec": 1.2,
+  "max_jans_per_run": 250
+}
