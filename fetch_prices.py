@@ -60,20 +60,33 @@ def model_wanted(name: str) -> bool:
     return any(norm(k) in n for k in CFG["target_models"])
 
 
+def category_wanted(name: str) -> bool:
+    """discover_model_ids/fetch_buybackでこのカテゴリページを開くかどうかの緩い判定。
+    実サイトでは複数機種が「iPhone（アイフォン）」のような1ページにまとまっているため、
+    ここではiPhone関連かどうかだけ見る。個別機種の絞り込みはparse_price_list内の
+    model_wanted（商品名ベース・厳密一致）に任せる。"""
+    n = norm(name)
+    return "iphone" in n or "アイフォン" in name or model_wanted(name)
+
+
 def discover_model_ids() -> list:
-    """iPhone一覧ページから機種ページのIDを集める。設定で固定もできる。"""
+    """カテゴリーページから対象機種のIDを集める。設定で固定もできる。"""
     if CFG.get("morimori_model_ids"):
         return list(CFG["morimori_model_ids"])
     html = get(f"{MORI}/category/0301").text
     soup = BeautifulSoup(html, "html.parser")
     found = {}
     for a in soup.find_all("a", href=True):
-        m = re.search(r"/category/(0301\d{3})/?$", a["href"])
+        href = (a.get("href") or "").strip()
+        m = re.search(r"/category/(\d{2,})(?:/)?$", href)
         if not m:
             continue
+        category_id = m.group(1)
         label = a.get_text(strip=True) or (a.find("img") or {}).get("alt", "")
-        found.setdefault(m.group(1), label)
-    ids = [i for i, label in found.items() if not label or model_wanted(label)]
+        if not category_id or category_id == "03":
+            continue
+        found.setdefault(category_id, label)
+    ids = [i for i, label in found.items() if not label or category_wanted(label)]
     print(f"[森森] 機種ページ {len(found)}件中 {len(ids)}件を対象にします")
     return ids
 
@@ -120,6 +133,8 @@ def parse_price_list(html: str, page_url: str) -> dict:
             kind = text[idx["type"]] if "type" in idx else name
             if "新品" not in kind and "新品" not in name:
                 continue  # 新品のみ扱う（中古は次のステップ）
+            if not model_wanted(name):
+                continue  # config.jsonのtarget_modelsに合致する商品名のみ扱う
             jan = re.sub(r"\D", "", text[idx["jan"]])
             price_text = text[idx["price"]]
             m = re.search(r"([\d,]+)円\(通常\)", price_text)
@@ -145,7 +160,7 @@ def fetch_buyback() -> dict:
         except requests.RequestException as e:
             print(f"[森森] {mid} 取得失敗: {e}", file=sys.stderr)
             continue
-        if page["title"] and not model_wanted(page["title"]):
+        if page["title"] and not category_wanted(page["title"]):
             continue
         all_items.update(page["items"])
         print(f"[森森] {page['title'] or mid}: {len(page['items'])}件")
