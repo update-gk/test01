@@ -1,0 +1,9 @@
+# cp config.example.toml config.toml して編集
+threshold_yen = 10000     # この差額以上で通知
+require_stock = true      # Apple在庫ありのときだけ通知
+db_path = "prices.db"
+
+[[items]]
+model = "iPhone 17 Pro"
+capacity = "256GB"
+color = "コズミックオレンジ"

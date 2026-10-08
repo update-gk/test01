@@ -1,0 +1,4 @@
+__pycache__/
+*.db
+config.toml
+.pytest_cache/
