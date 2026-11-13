@@ -91,6 +91,13 @@ def discover_model_ids() -> list:
     return ids
 
 
+def clean_name(name: str) -> str:
+    """空白・改行をつぶし、先頭の「新品」「Apple」を外して表示用の商品名にする。"""
+    name = re.sub(r"\s+", " ", name).strip()
+    name = re.sub(r"^新品\s*", "", name)
+    return re.sub(r"^Apple\s+", "", name)
+
+
 def expand_cells(row):
     """colspanを展開してセル文字列のリストにする（ヘッダーと本文の列位置を揃えるため）。"""
     out = []
@@ -144,26 +151,39 @@ def parse_price_list(html: str, page_url: str) -> dict:
             link = cells[idx["name"]].find("a")
             items[jan] = {
                 "jan": jan,
-                "name": re.sub(r"^新品\s*", "", name),
+                "name": clean_name(name),
                 "buyback": price,
                 "buyback_url": urljoin(page_url, link["href"]) if link and link.get("href") else page_url,
             }
-    return {"title": title, "items": items}
+    nxt = soup.select_one("ul.pagination li.next a[href]")
+    next_url = urljoin(page_url, nxt["href"]) if nxt else None
+    return {"title": title, "items": items, "next": next_url}
+
+
+MAX_PAGES = 30  # 無限ループ防止の上限（森森は1ページ100件でページ分割されている）
 
 
 def fetch_buyback() -> dict:
     all_items = {}
     for mid in discover_model_ids():
         url = f"{MORI}/category/price-list/{mid}"
-        try:
-            page = parse_price_list(get(url).text, url)
-        except requests.RequestException as e:
-            print(f"[森森] {mid} 取得失敗: {e}", file=sys.stderr)
-            continue
-        if page["title"] and not category_wanted(page["title"]):
-            continue
-        all_items.update(page["items"])
-        print(f"[森森] {page['title'] or mid}: {len(page['items'])}件")
+        seen, pages, count = set(), 0, 0
+        while url and url not in seen and pages < MAX_PAGES:
+            seen.add(url)
+            pages += 1
+            try:
+                page = parse_price_list(get(url).text, url)
+            except requests.RequestException as e:
+                print(f"[森森] {mid} p{pages} 取得失敗: {e}", file=sys.stderr)
+                break
+            if page["title"] and not category_wanted(page["title"]):
+                break
+            all_items.update(page["items"])
+            count += len(page["items"])
+            url = page["next"]
+        if pages >= MAX_PAGES:
+            print(f"[森森] {mid}: {MAX_PAGES}ページで打ち切り（サイト構造の変更の可能性）", file=sys.stderr)
+        print(f"[森森] {mid}: {count}件（{pages}ページ）")
     return all_items
 
 
