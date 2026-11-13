@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>価格差ウォッチ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1b2a38;
+    --muted: #5d6b78;
+    --paper: #edf0f2;
+    --panel: #ffffff;
+    --line: #cfd6db;
+    --gain: #0f7a5c;
+    --gain-soft: #d6ede5;
+    --loss: #a63d40;
+    --warn: #9a5b00;
+    --warn-soft: #fbeccf;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; margin-bottom: 16px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+  .sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+  .fresh { padding: 8px 12px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; }
+  .fresh strong { font-size: 15px; }
+  .fresh.stale { background: var(--warn-soft); border-color: #e2c48b; color: var(--warn); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; }
+  .controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .controls input[type=number], .controls input[type=search] {
+    font: inherit; color: var(--ink); padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff;
+  }
+  .controls input[type=number] { width: 96px; text-align: right; }
+  .controls input[type=search] { width: 170px; }
+  input:focus-visible, a:focus-visible, button:focus-visible { outline: 3px solid #2b6cb0; outline-offset: 2px; }
+  .count { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .head, .row { display: grid; grid-template-columns: minmax(0, 1fr) 96px 96px 150px; gap: 12px; padding: 10px 14px; align-items: center; }
+  .head { font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); background: #f7f9fa; }
+  .head span:nth-child(n+2), .row .num { text-align: right; }
+  .row { border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .name { font-weight: 500; overflow-wrap: anywhere; }
+  .name a { color: inherit; text-decoration-color: var(--line); text-underline-offset: 3px; }
+  .name a:hover { text-decoration-color: var(--ink); }
+  .meta { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+  .profit { text-align: right; }
+  .profit b { font-size: 17px; font-weight: 700; }
+  .profit.pos b { color: var(--gain); }
+  .profit.neg b { color: var(--loss); }
+  .bar { height: 5px; margin-top: 4px; background: transparent; border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--gain); margin-left: auto; border-radius: 3px; }
+  .row.hot { background: linear-gradient(90deg, var(--gain-soft), transparent 55%); }
+
+  .empty { padding: 36px 16px; text-align: center; color: var(--muted); }
+  .note { margin-top: 14px; font-size: 12px; color: var(--muted); }
+
+  @media (max-width: 640px) {
+    .head { display: none; }
+    .row { grid-template-columns: 1fr auto; row-gap: 2px; }
+    .row .num { text-align: left; font-size: 13px; color: var(--muted); grid-column: 1; }
+    .row .num::before { content: attr(data-label) "　"; }
+    .profit { grid-column: 2; grid-row: 1 / span 3; align-self: center; min-width: 92px; }
+    .count { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>価格差ウォッチ</h1>
+      <p class="sub">楽天市場（販売）と 森森買取（通常買取・新品）の差額</p>
+    </div>
+    <div class="fresh" id="fresh" role="status">読み込み中…</div>
+  </header>
+
+  <section class="controls" aria-label="絞り込み">
+    <label>差額
+      <input type="number" id="min" step="500" value="0" inputmode="numeric"> 円以上
+    </label>
+    <label>機種
+      <input type="search" id="q" placeholder="例: 17 Pro 256GB">
+    </label>
+    <span class="count" id="count"></span>
+  </section>
+
+  <section class="list" aria-label="差額一覧">
+    <div class="head"><span>商品</span><span>買取</span><span>楽天</span><span>差額</span></div>
+    <div id="rows"></div>
+  </section>
+
+  <p class="note" id="note"></p>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const yen = (n) => n.toLocaleString("ja-JP") + "円";
+let DATA = null;
+
+function minutesAgo(iso) { return Math.round((Date.now() - new Date(iso).getTime()) / 60000); }
+
+function renderFresh() {
+  const el = $("fresh");
+  if (!DATA || !DATA.updated_at) { el.textContent = "まだデータがありません"; return; }
+  const m = minutesAgo(DATA.updated_at);
+  const t = new Date(DATA.updated_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const ago = m < 60 ? `${m}分前` : `${Math.floor(m / 60)}時間${m % 60}分前`;
+  el.classList.toggle("stale", m > 90);
+  el.innerHTML = `最終確認 <strong>${t}</strong>（${ago}）` + (m > 90 ? "<br>更新が止まっている可能性があります" : "");
+}
+
+function render() {
+  const rows = $("rows");
+  if (!DATA || !DATA.items.length) {
+    rows.innerHTML = '<div class="empty">比較できる商品がまだありません。Actionsを一度実行してください。</div>';
+    $("count").textContent = "";
+    return;
+  }
+  const min = Number($("min").value) || 0;
+  const words = $("q").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const list = DATA.items.filter((r) => {
+    if (r.profit < min) return false;
+    const hay = r.name.toLowerCase().replace(/\s+/g, "");
+    return words.every((w) => hay.includes(w.replace(/\s+/g, "")));
+  });
+  const max = Math.max(1, ...list.map((r) => r.profit));
+  $("count").textContent = `${list.length}件 / 比較 ${DATA.compared}件`;
+  if (!list.length) { rows.innerHTML = '<div class="empty">条件に合う商品がありません。差額の下限を下げてみてください。</div>'; return; }
+
+  rows.innerHTML = list.map((r) => {
+    const pos = r.profit > 0;
+    const hot = r.profit >= DATA.threshold;
+    const w = pos ? Math.round((r.profit / max) * 100) : 0;
+    const rk = r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${esc(r.name)}</a>` : esc(r.name);
+    return `<div class="row${hot ? " hot" : ""}">
+      <div class="name">${rk}
+        <span class="meta">${esc(r.shop)}${r.shipping_separate ? "（送料別）" : ""} ・ <a href="${r.buyback_url}" target="_blank" rel="noopener">買取ページ</a></span></div>
+      <div class="num" data-label="買取">${yen(r.buyback)}</div>
+      <div class="num" data-label="楽天">${yen(r.rakuten_price)}</div>
+      <div class="profit ${pos ? "pos" : "neg"}"><b>${pos ? "+" : ""}${yen(r.profit)}</b>
+        <div class="bar"><i style="width:${w}%"></i></div></div>
+    </div>`;
+  }).join("");
+}
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function load() {
+  try {
+    const res = await fetch("data.json?t=" + Date.now());
+    DATA = await res.json();
+  } catch (e) {
+    $("fresh").textContent = "データを読み込めませんでした";
+    return;
+  }
+  $("min").value = DATA.threshold ?? 0;
+  $("note").textContent = "買取価格は「通常買取・新品未開封・SIMフリー」の表示価格です。数量制限や改定があるため、仕入れ前に必ず買取ページで最新価格を確認してください。"
+    + (DATA.use_points ? " 楽天ポイントは差額に含めています。" : " 楽天ポイントは差額に含めていません。");
+  renderFresh(); render();
+}
+$("min").addEventListener("input", render);
+$("q").addEventListener("input", render);
+load();
+setInterval(renderFresh, 30000);
+</script>
+</body>
+</html>
